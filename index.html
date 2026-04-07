@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fluxo Minimalista - Objetivos</title>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #fafafa;
+            --text-color: #222;
+            --border-color: #ddd;
+            --accent-color: #000;
+            --hover-color: #f0f0f0;
+            --success-color: #28a745;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+
+        body {
+            background-color: var(--bg-color); color: var(--text-color);
+            line-height: 1.6; padding: 20px; max-width: 900px; margin: 0 auto;
+        }
+
+        /* Cabeçalho dinâmico */
+        header {
+            display: flex; flex-wrap: wrap; gap: 10px; justify-content: space-between;
+            align-items: center; margin-bottom: 30px; padding-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .header-controls { display: flex; gap: 10px; flex-wrap: wrap; }
+        
+        h2.view-title { font-weight: 500; font-size: 1.2rem; }
+
+        button {
+            background: transparent; border: 1px solid var(--border-color);
+            padding: 8px 16px; border-radius: 6px; cursor: pointer;
+            font-size: 14px; transition: all 0.2s; color: var(--text-color);
+        }
+        button:hover { background: var(--hover-color); border-color: var(--accent-color); }
+        button.primary { background: var(--accent-color); color: #fff; border-color: var(--accent-color); }
+        button.primary:hover { background: #333; }
+
+        /* Visão das Pastas (Grid Responsivo) */
+        #foldersView {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .folder-card {
+            background: #fff; border: 1px solid var(--border-color);
+            border-radius: 8px; padding: 20px; cursor: pointer;
+            transition: all 0.2s; display: flex; flex-direction: column;
+            justify-content: space-between; min-height: 120px;
+        }
+        .folder-card:hover { transform: translateY(-3px); box-shadow: 0 4px 12px rgba(0,0,0,0.05); border-color: var(--accent-color); }
+        .folder-card h3 { font-size: 1.1rem; margin-bottom: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .folder-stats { font-size: 0.85rem; color: #777; margin-bottom: 15px; }
+        .folder-actions { display: flex; justify-content: flex-end; gap: 5px; }
+        .folder-actions button { padding: 4px 8px; font-size: 12px; }
+
+        /* Visão Fluxograma (Blocos) */
+        #flowView { display: none; flex-direction: column; align-items: center; }
+        .node-card {
+            width: 100%; max-width: 600px; background: #fff; border: 1px solid var(--border-color);
+            border-radius: 8px; padding: 20px; margin-bottom: 20px; position: relative; transition: all 0.3s;
+        }
+        .node-card.completed { border-color: var(--success-color); opacity: 0.7; }
+        .node-card h3 { margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
+        .node-card p { white-space: pre-wrap; color: #555; font-size: 14px; max-height: 200px; overflow-y: auto; }
+        .node-actions { margin-top: 15px; display: flex; gap: 10px; justify-content: flex-end; }
+        .node-card::after {
+            content: '↓'; position: absolute; bottom: -22px; left: 50%;
+            transform: translateX(-50%); font-size: 18px; color: var(--border-color);
+        }
+        .node-card:last-child::after { content: none; }
+
+        /* Visão Minimalista (Bolinhas) */
+        #circlesView {
+            display: none; flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 20px; padding: 40px 0;
+        }
+        .circle-item { display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; }
+        .circle {
+            width: 40px; height: 40px; border: 2px solid var(--accent-color);
+            border-radius: 50%; transition: all 0.3s; display: flex; align-items: center; justify-content: center;
+        }
+        .circle.completed { background-color: var(--accent-color); }
+        .circle-title { font-size: 12px; max-width: 80px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        /* Modais */
+        .modal-overlay {
+            display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.4); justify-content: center; align-items: center; z-index: 100; padding: 20px;
+        }
+        .modal { background: #fff; padding: 30px; border-radius: 8px; width: 100%; max-width: 500px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .modal input, .modal textarea { width: 100%; margin-bottom: 15px; padding: 10px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 14px; }
+        .modal textarea { height: 150px; resize: vertical; }
+        .modal-buttons { display: flex; justify-content: flex-end; gap: 10px; }
+
+        .hidden { display: none !important; }
+        .empty-state { text-align: center; color: #888; margin-top: 50px; width: 100%; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h2 class="view-title" id="mainTitle">Meus Objetivos</h2>
+        <div class="header-controls" id="headerHomeControls">
+            <button class="primary" onclick="openFolderModal()">+ Nova Pasta</button>
+            <button onclick="exportBackup()">Exportar Backup</button>
+            <button onclick="document.getElementById('importFile').click()">Importar</button>
+            <input type="file" id="importFile" accept=".json" onchange="importBackup(event)" style="display:none">
+        </div>
+        <div class="header-controls hidden" id="headerFolderControls">
+            <button onclick="goHome()">← Voltar</button>
+            <button class="primary" onclick="openNodeModal()">+ Novo Bloco</button>
+            <button onclick="toggleView()" id="btnToggleView">Visão: Bolinhas</button>
+            <button onclick="resetFolderProgress()">Zerar Progresso</button>
+        </div>
+    </header>
+
+    <main id="appContainer">
+        <div id="foldersView"></div>
+
+        <div id="flowView"></div>
+        <div id="circlesView"></div>
+    </main>
+
+    <div id="modalFolderOverlay" class="modal-overlay">
+        <div class="modal">
+            <h3 id="folderModalTitle" style="margin-bottom: 15px;">Nova Pasta</h3>
+            <input type="hidden" id="folderId">
+            <input type="text" id="folderName" placeholder="Nome do Objetivo (ex: Projeto Web)" maxlength="50">
+            <div class="modal-buttons">
+                <button onclick="closeModals()">Cancelar</button>
+                <button class="primary" onclick="saveFolder()">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalNodeOverlay" class="modal-overlay">
+        <div class="modal">
+            <h3 id="nodeModalTitle" style="margin-bottom: 15px;">Novo Bloco</h3>
+            <input type="hidden" id="nodeId">
+            <input type="text" id="nodeTitle" placeholder="Título (ex: Passo 1)" maxlength="100">
+            <textarea id="nodeText" placeholder="Escreva os detalhes aqui... (até 4000 caracteres)" maxlength="4000"></textarea>
+            <div style="text-align: right; font-size: 12px; color: #888; margin-bottom: 15px;">
+                <span id="charCount">0</span>/4000
+            </div>
+            <div class="modal-buttons">
+                <button onclick="closeModals()">Cancelar</button>
+                <button class="primary" onclick="saveNode()">Salvar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- ESTADO E DADOS ---
+        let appData = { folders: [] };
+        let activeFolderId = null;
+        let currentView = 'flow'; 
+
+        // Tentar carregar dados e fazer migração se for o formato antigo
+        const savedData = localStorage.getItem('miniflow_data');
+        if (savedData) {
+            try {
+                const parsed = JSON.parse(savedData);
+                if (Array.isArray(parsed)) {
+                    // É do programa anterior (apenas blocos), vamos migrar para uma pasta
+                    appData.folders.push({
+                        id: Date.now().toString(),
+                        name: 'Meu Primeiro Objetivo',
+                        nodes: parsed
+                    });
+                    saveToLocal();
+                } else if (parsed.folders) {
+                    appData = parsed;
+                }
+            } catch(e) { console.error("Erro ao ler dados locais", e); }
+        }
+
+        // --- DOM ELEMENTS ---
+        const foldersView = document.getElementById('foldersView');
+        const flowView = document.getElementById('flowView');
+        const circlesView = document.getElementById('circlesView');
+        
+        const headerHome = document.getElementById('headerHomeControls');
+        const headerFolder = document.getElementById('headerFolderControls');
+        const mainTitle = document.getElementById('mainTitle');
+
+        const modalFolder = document.getElementById('modalFolderOverlay');
+        const modalNode = document.getElementById('modalNodeOverlay');
+
+        // Contador de texto
+        document.getElementById('nodeText').addEventListener('input', (e) => {
+            document.getElementById('charCount').textContent = e.target.value.length;
+        });
+
+        // --- FUNÇÕES PRINCIPAIS ---
+
+        function saveToLocal() {
+            localStorage.setItem('miniflow_data', JSON.stringify(appData));
+            render();
+        }
+
+        function render() {
+            if (activeFolderId === null) {
+                renderFolders();
+            } else {
+                renderNodes();
+            }
+        }
+
+        // --- NAVEGAÇÃO E PASTAS ---
+
+        function goHome() {
+            activeFolderId = null;
+            currentView = 'flow'; // reseta visão
+            document.getElementById('btnToggleView').textContent = 'Visão: Bolinhas';
+            mainTitle.textContent = 'Meus Objetivos';
+            
+            headerFolder.classList.add('hidden');
+            headerHome.classList.remove('hidden');
+            
+            flowView.style.display = 'none';
+            circlesView.style.display = 'none';
+            foldersView.style.display = 'grid';
+            
+            render();
+        }
+
+        function renderFolders() {
+            foldersView.innerHTML = '';
+            
+            if (appData.folders.length === 0) {
+                foldersView.innerHTML = '<div class="empty-state">Nenhuma pasta criada. Clique em "+ Nova Pasta" para começar.</div>';
+                foldersView.style.display = 'block'; // Muda de grid para block para centralizar texto
+                return;
+            }
+            foldersView.style.display = 'grid';
+
+            appData.folders.forEach(folder => {
+                const total = folder.nodes ? folder.nodes.length : 0;
+                const completed = folder.nodes ? folder.nodes.filter(n => n.completed).length : 0;
+                
+                const card = document.createElement('div');
+                card.className = 'folder-card';
+                card.onclick = (e) => {
+                    // Evita entrar na pasta se clicar em editar/excluir
+                    if(!e.target.closest('button')) openFolder(folder.id);
+                };
+                
+                card.innerHTML = `
+                    <div>
+                        <h3>${folder.name}</h3>
+                        <div class="folder-stats">${completed} de ${total} passos concluídos</div>
+                    </div>
+                    <div class="folder-actions">
+                        <button onclick="editFolder('${folder.id}')">✏️</button>
+                        <button onclick="deleteFolder('${folder.id}')">🗑️</button>
+                    </div>
+                `;
+                foldersView.appendChild(card);
+            });
+        }
+
+        function openFolder(folderId) {
+            activeFolderId = folderId;
+            const folder = appData.folders.find(f => f.id === folderId);
+            mainTitle.textContent = folder.name;
+
+            foldersView.style.display = 'none';
+            headerHome.classList.add('hidden');
+            headerFolder.classList.remove('hidden');
+            
+            if (currentView === 'flow') flowView.style.display = 'flex';
+            else circlesView.style.display = 'flex';
+
+            renderNodes();
+        }
+
+        // --- FLUXOGRAMA (DENTRO DA PASTA) ---
+
+        function renderNodes() {
+            flowView.innerHTML = '';
+            circlesView.innerHTML = '';
+            
+            const folder = appData.folders.find(f => f.id === activeFolderId);
+            if (!folder.nodes) folder.nodes = [];
+
+            if (folder.nodes.length === 0) {
+                flowView.innerHTML = '<div class="empty-state">Pasta vazia. Crie seu primeiro bloco.</div>';
+                return;
+            }
+
+            folder.nodes.forEach((node, index) => {
+                // Flow View
+                const card = document.createElement('div');
+                card.className = `node-card ${node.completed ? 'completed' : ''}`;
+                card.innerHTML = `
+                    <h3>
+                        <input type="checkbox" ${node.completed ? 'checked' : ''} onchange="toggleNode('${node.id}')" style="cursor:pointer; width:18px; height:18px;"> 
+                        ${index + 1}. ${node.title}
+                    </h3>
+                    <p>${node.text}</p>
+                    <div class="node-actions">
+                        <button onclick="editNode('${node.id}')">Editar</button>
+                        <button onclick="deleteNode('${node.id}')">Excluir</button>
+                    </div>
+                `;
+                flowView.appendChild(card);
+
+                // Circles View
+                const circleItem = document.createElement('div');
+                circleItem.className = 'circle-item';
+                circleItem.onclick = () => toggleNode(node.id);
+                circleItem.innerHTML = `
+                    <div class="circle ${node.completed ? 'completed' : ''}"></div>
+                    <div class="circle-title" title="${node.title}">${node.title}</div>
+                `;
+                circlesView.appendChild(circleItem);
+            });
+        }
+
+        function toggleNode(nodeId) {
+            const folder = appData.folders.find(f => f.id === activeFolderId);
+            const node = folder.nodes.find(n => n.id === nodeId);
+            
+            // Verifica se estava incompleto antes da mudança
+            const wasIncomplete = !node.completed; 
+            node.completed = !node.completed;
+            
+            saveToLocal();
+
+            // Checa confetes apenas se acabou de marcar como completo
+            if (wasIncomplete) {
+                const allDone = folder.nodes.every(n => n.completed);
+                if (allDone && folder.nodes.length > 0) triggerConfetti();
+            }
+        }
+
+        function toggleView() {
+            const btn = document.getElementById('btnToggleView');
+            if (currentView === 'flow') {
+                currentView = 'circles';
+                flowView.style.display = 'none';
+                circlesView.style.display = 'flex';
+                btn.textContent = 'Visão: Fluxo';
+            } else {
+                currentView = 'flow';
+                flowView.style.display = 'flex';
+                circlesView.style.display = 'none';
+                btn.textContent = 'Visão: Bolinhas';
+            }
+        }
+
+        function triggerConfetti() {
+            var duration = 3 * 1000;
+            var end = Date.now() + duration;
+            (function frame() {
+                confetti({ particleCount: 5, angle: 60, spread: 55, origin: { x: 0 }, colors: ['#000000', '#555555', '#aaaaaa'] });
+                confetti({ particleCount: 5, angle: 120, spread: 55, origin: { x: 1 }, colors: ['#000000', '#555555', '#aaaaaa'] });
+                if (Date.now() < end) requestAnimationFrame(frame);
+            }());
+        }
+
+        // --- MODAIS E CRUD ---
+
+        function closeModals() {
+            modalFolder.style.display = 'none';
+            modalNode.style.display = 'none';
+        }
+
+        // CRUD Pastas
+        function openFolderModal() {
+            document.getElementById('folderModalTitle').textContent = 'Nova Pasta';
+            document.getElementById('folderId').value = '';
+            document.getElementById('folderName').value = '';
+            modalFolder.style.display = 'flex';
+        }
+
+        function editFolder(id) {
+            const folder = appData.folders.find(f => f.id === id);
+            if (folder) {
+                document.getElementById('folderModalTitle').textContent = 'Editar Pasta';
+                document.getElementById('folderId').value = folder.id;
+                document.getElementById('folderName').value = folder.name;
+                modalFolder.style.display = 'flex';
+            }
+        }
+
+        function saveFolder() {
+            const id = document.getElementById('folderId').value;
+            const name = document.getElementById('folderName').value.trim() || 'Nova Pasta';
+
+            if (id) {
+                const folder = appData.folders.find(f => f.id === id);
+                if(folder) folder.name = name;
+            } else {
+                appData.folders.push({ id: Date.now().toString(), name: name, nodes: [] });
+            }
+            closeModals();
+            saveToLocal();
+        }
+
+        function deleteFolder(id) {
+            if(confirm('Tem certeza que deseja excluir esta pasta e TUDO que tem dentro dela?')) {
+                appData.folders = appData.folders.filter(f => f.id !== id);
+                saveToLocal();
+            }
+        }
+
+        // CRUD Blocos (Nodes)
+        function openNodeModal() {
+            document.getElementById('nodeModalTitle').textContent = 'Novo Bloco';
+            document.getElementById('nodeId').value = '';
+            document.getElementById('nodeTitle').value = '';
+            document.getElementById('nodeText').value = '';
+            document.getElementById('charCount').textContent = '0';
+            modalNode.style.display = 'flex';
+        }
+
+        function editNode(id) {
+            const folder = appData.folders.find(f => f.id === activeFolderId);
+            const node = folder.nodes.find(n => n.id === id);
+            if (node) {
+                document.getElementById('nodeModalTitle').textContent = 'Editar Bloco';
+                document.getElementById('nodeId').value = node.id;
+                document.getElementById('nodeTitle').value = node.title;
+                document.getElementById('nodeText').value = node.text;
+                document.getElementById('charCount').textContent = node.text.length;
+                modalNode.style.display = 'flex';
+            }
+        }
+
+        function saveNode() {
+            const folder = appData.folders.find(f => f.id === activeFolderId);
+            const id = document.getElementById('nodeId').value;
+            const title = document.getElementById('nodeTitle').value.trim() || 'Sem Título';
+            const text = document.getElementById('nodeText').value.trim();
+
+            if (id) {
+                const node = folder.nodes.find(n => n.id === id);
+                if (node) { node.title = title; node.text = text; }
+            } else {
+                folder.nodes.push({ id: Date.now().toString(), title: title, text: text, completed: false });
+            }
+            closeModals();
+            saveToLocal();
+        }
+
+        function deleteNode(id) {
+            if(confirm('Tem certeza que deseja excluir este bloco?')) {
+                const folder = appData.folders.find(f => f.id === activeFolderId);
+                folder.nodes = folder.nodes.filter(n => n.id !== id);
+                saveToLocal();
+            }
+        }
+
+        function resetFolderProgress() {
+            if(confirm('Desmarcar todo o progresso deste objetivo?')) {
+                const folder = appData.folders.find(f => f.id === activeFolderId);
+                folder.nodes.forEach(n => n.completed = false);
+                saveToLocal();
+            }
+        }
+
+        // --- BACKUP ---
+
+        function exportBackup() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appData));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", "meus_objetivos_" + new Date().getTime() + ".json");
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        }
+
+        function importBackup(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    if (importedData && importedData.folders) {
+                        appData = importedData;
+                        saveToLocal();
+                        alert('Backup importado com sucesso!');
+                    } else { alert('Formato de arquivo inválido. Use um backup gerado por este sistema.'); }
+                } catch (err) { alert('Erro ao ler arquivo.'); }
+            };
+            reader.readAsText(file);
+            event.target.value = ''; 
+        }
+
+        // --- INICIALIZAÇÃO ---
+        render();
+    </script>
+</body>
+</html>
